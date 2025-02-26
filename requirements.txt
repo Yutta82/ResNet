@@ -1,0 +1,5 @@
+opencv-python~=4.11.0.86
+numpy~=1.26.2
+keras~=3.1.1
+scikit-learn~=1.4.1.post1
+matplotlib~=3.8.3
