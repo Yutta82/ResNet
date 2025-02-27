@@ -17,7 +17,7 @@ def im2col(input_data, filter_h, filter_w, stride=1, pad=0):
     out_w = (W + 2 * pad - filter_w) // stride + 1
 
     # 为输入数据添加填充
-    img = np.pad(input_data, [(0, 0), (0, 0), (pad, pad), (pad, pad)], 'constant')
+    img = np.pad(input_data, ((0, 0), (0, 0), (pad, pad), (pad, pad)), 'constant')
 
     # 生成列矩阵，形状为 (N, C, filter_h, filter_w, out_h, out_w)
     col = np.zeros((N, C, filter_h, filter_w, out_h, out_w))
@@ -75,6 +75,7 @@ class ConvLayer:
         :param stride: 步幅
         :param padding: 填充
         """
+        self.input_data = None
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.filter_size = filter_size
@@ -105,29 +106,38 @@ class ConvLayer:
         col_filter = self.filters.reshape(self.out_channels, -1).T
 
         # 执行卷积：列数据与卷积核进行矩阵乘法
-        out = col.dot(col_filter) + self.bias
+        out = np.dot(col, col_filter) + self.bias
         out = out.reshape(input_data.shape[0], input_data.shape[2], input_data.shape[3], self.out_channels)
         return out
 
     def backward(self, dout):
         """
-        反向传播计算梯度
-        :param dout: 上一层的梯度
-        :return: 输入数据的梯度（dinput），卷积核的梯度（dfilters），偏置项的梯度（dbias）
+        反向传播：计算梯度并传递回去
+        :param dout: 上一层的梯度（从下一层传递过来的梯度，形状为 (N, out_channels, H_out, W_out)）
+        :return: 传递回去的梯度（dinput）、卷积核的梯度（dfilters）和偏置项的梯度（dbias）
         """
-        # 使用 im2col 将输入数据转换为列形式
-        col = im2col(self.input_data, self.filter_size, self.filter_size, self.stride, self.padding)
 
-        # 计算卷积核和偏置的梯度
-        dcol = dout.reshape(dout.shape[0], -1).dot(self.filters.reshape(self.out_channels, -1))
+        # 第一步：计算卷积核和偏置的梯度
+        # `dout` 传递回来的梯度是上一层的输出梯度，形状为 (N, out_channels, H_out, W_out)
+        # 我们需要将 `dout` 展平后与卷积核进行点乘，得到卷积核（filters）的梯度
+        # 先把 `dout` 转换为矩阵形式（N * out_h * out_w, out_channels）
+        dcol = np.dot(dout.reshape(dout.shape[0], -1), self.filters.reshape(self.out_channels, -1))
 
-        # 计算输入数据的梯度
+        # 第二步：通过 `col2im` 将卷积核的梯度（`dcol`）转换回输入数据的形状
+        # 计算输入数据的梯度（dinput），`dcol` 为卷积核梯度，通过 im2col 进行反向传播
         dinput = col2im(dcol, self.input_data.shape, self.filter_size, self.filter_size, self.stride, self.padding)
 
-        # 计算卷积核的梯度
+        # 第三步：计算卷积核（filters）的梯度
+        # 卷积核的梯度是通过反向传播传递过来的 `dout` 和对应位置的输入数据的乘积
+        # `dcol.T` 将梯度和输入数据列进行点乘，得到卷积核的梯度
         dfilters = dcol.T.reshape(self.out_channels, self.input_data.shape[1], self.filter_size, self.filter_size)
 
-        # 计算偏置的梯度
+        # 第四步：计算偏置（bias）的梯度
+        # 偏置的梯度是 `dout` 在所有输出通道和空间位置上的和，即对每个输出通道求和
+        # `np.sum(dout, axis=(0, 2, 3), keepdims=True)`：对 `dout` 的每个输出通道（`axis=0`），
+        # 高度（`axis=2`）和宽度（`axis=3`）进行求和，得到每个卷积核的偏置梯度
         dbias = np.sum(dout, axis=(0, 2, 3), keepdims=True)
 
+        # 返回计算得到的梯度（输入数据的梯度、卷积核的梯度、偏置的梯度）
         return dinput, dfilters, dbias
+
