@@ -20,7 +20,8 @@ def im2col(input_data, filter_h, filter_w, stride=1, pad=0):
     img = np.pad(input_data, ((0, 0), (0, 0), (pad, pad), (pad, pad)), 'constant')
 
     # 生成列矩阵，形状为 (N, C, filter_h, filter_w, out_h, out_w)
-    col = np.zeros((N, C, filter_h, filter_w, out_h, out_w))
+    # 使用float32是因为float64会大量占用内存
+    col = np.zeros((N, C, filter_h, filter_w, out_h, out_w), dtype=np.float32)
 
     # 将输入数据展开为列的形式
     for y in range(filter_h):
@@ -31,7 +32,7 @@ def im2col(input_data, filter_h, filter_w, stride=1, pad=0):
 
     # 将多维数组转换为二维数组 (N * out_h * out_w, C * filter_h * filter_w)
     col = col.transpose(0, 4, 5, 1, 2, 3).reshape(N * out_h * out_w, -1)
-    return col
+    return col  # 形状应为 (N * out_h * out_w, C * filter_h * filter_w)
 
 
 def col2im(col, input_shape, filter_h, filter_w, stride=1, pad=0):
@@ -84,20 +85,21 @@ class ConvLayer:
 
         # 卷积核的初始化使用 He 初始化方法（适用于 ReLU 激活函数）
         # 高斯分布的均值为 0，方差为 2 / 输入通道数
-        self.filters = np.random.randn(out_channels, in_channels, filter_size, filter_size) * np.sqrt(2. / 3)
+        self.filters = np.random.randn(out_channels, in_channels, filter_size, filter_size) * np.sqrt(2. / in_channels)
         self.bias = np.zeros(out_channels)  # 偏置初始化为 0
 
-    def forward(self, input_data, filters, bias):
+    def forward(self, input_data):
         """
         前向传播计算卷积
         :param input_data: 输入数据，形状为 (N, C, H, W)
-        :param filters: 卷积核，形状为 (num_filters, C, filter_size, filter_size)
-        :param bias: 偏置项，形状为 (num_filters, 1)
         :return: 卷积结果，形状为 (N, num_filters, H_out, W_out)
         """
         self.input_data = input_data
-        self.filters = filters
-        self.bias = bias
+        N, C, H, W = input_data.shape
+
+        # 计算输出高度和宽度
+        out_h = (H + 2 * self.padding - self.filter_size) // self.stride + 1
+        out_w = (W + 2 * self.padding - self.filter_size) // self.stride + 1
 
         # 使用 im2col 将输入数据转换为列形式
         col = im2col(input_data, self.filter_size, self.filter_size, self.stride, self.padding)
@@ -105,9 +107,13 @@ class ConvLayer:
         # 将 filters 转换为列
         col_filter = self.filters.reshape(self.out_channels, -1).T
 
+        print(f"col.shape:{col.shape}")
+        print(f"col_filter.shape:{col_filter.shape}")
+
         # 执行卷积：列数据与卷积核进行矩阵乘法
         out = np.dot(col, col_filter) + self.bias
-        out = out.reshape(input_data.shape[0], input_data.shape[2], input_data.shape[3], self.out_channels)
+        out = out.reshape(N, out_h, out_w, self.out_channels)
+        out = out.transpose(0, 3, 1, 2)
         return out
 
     def backward(self, dout):

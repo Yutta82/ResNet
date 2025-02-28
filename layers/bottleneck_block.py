@@ -12,20 +12,21 @@ class BottleneckBlock:
         :param stride: 步幅
         """
         # 第一层 1x1 卷积，用于减少通道数
-        self.conv1 = ConvLayer(in_channels, out_channels // 4, filter_size=1, stride=stride)
+        self.conv1 = ConvLayer(in_channels, out_channels // 4, filter_size=1, stride=1, padding=0)
         self.bn1 = BatchNorm()
 
         # 第二层 3x3 卷积，用于卷积操作
-        self.conv2 = ConvLayer(out_channels // 4, out_channels // 4, filter_size=3, stride=1)
+        self.conv2 = ConvLayer(out_channels // 4, out_channels // 4, filter_size=3, stride=stride, padding=1)
         self.bn2 = BatchNorm()
 
         # 第三层 1x1 卷积，用于恢复通道数
-        self.conv3 = ConvLayer(out_channels // 4, out_channels, filter_size=1, stride=1)
+        self.conv3 = ConvLayer(out_channels // 4, out_channels, filter_size=1, stride=1, padding=0)
         self.bn3 = BatchNorm()
 
         # 如果输入输出通道数不同，则需要使用 1x1 卷积调整输入通道数
         if in_channels != out_channels:
-            self.shortcut = ConvLayer(in_channels, out_channels, filter_size=1, stride=stride)
+            self.shortcut = ConvLayer(in_channels, out_channels, filter_size=1, stride=stride, padding=0)
+            self.shortcut_bn = BatchNorm()
         else:
             self.shortcut = None
 
@@ -53,9 +54,11 @@ class BottleneckBlock:
 
         # 残差连接
         if self.shortcut is not None:
-            identity = self.shortcut.forward(identity)
+            identity = self.shortcut.forward(x)
+            identity = self.shortcut_bn.forward(identity)
 
         out += identity  # 残差连接
+        out = ReLU().forward(out)
         return out
 
     def backward(self, dout):
@@ -69,14 +72,17 @@ class BottleneckBlock:
         dx = dout
 
         # 第3层 1x1卷积的梯度
+        dx = ReLU().backward(dx)
         dx = self.bn3.backward(dx)
         dx = self.conv3.backward(dx)
 
         # 第2层 3x3卷积的梯度
+        dx = ReLU().backward(dx)
         dx = self.bn2.backward(dx)
         dx = self.conv2.backward(dx)
 
         # 第1层 1x1卷积的梯度
+        dx = ReLU().backward(dx)
         dx = self.bn1.backward(dx)
         dx = self.conv1.backward(dx)
 

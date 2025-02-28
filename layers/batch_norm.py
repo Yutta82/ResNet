@@ -1,5 +1,10 @@
 import numpy as np
 
+"""
+强制性地调整激活值分布广度
+具体就是进行使数据分布的均值为0方差为1的正规化
+"""
+
 
 class BatchNorm:
     def __init__(self, epsilon=1e-5, momentum=0.9):
@@ -8,13 +13,14 @@ class BatchNorm:
         :param epsilon: 避免除零错误的极小值
         :param momentum: 用于更新均值和方差的动量
         """
+        self.input_data = None
         self.x_hat = None
         self.var = None
         self.mean = None
         self.epsilon = epsilon
         self.momentum = momentum
-        self.gamma = None  # 标准化缩放系数（会在forward中初始化）
-        self.beta = None  # 标准化偏移量（会在forward中初始化）
+        self.gamma = 1.0  # 标准化缩放系数（会在forward中初始化）
+        self.beta = 0.0  # 标准化偏移量（会在forward中初始化）
         self.running_mean = None  # 存储均值，用于推理时的使用
         self.running_var = None  # 存储方差，用于推理时的使用
 
@@ -39,8 +45,10 @@ class BatchNorm:
                 self.running_mean = self.mean
                 self.running_var = self.var
             else:
-                self.running_mean = self.momentum * self.mean + (1 - self.momentum) * self.running_mean
-                self.running_var = self.momentum * self.var + (1 - self.momentum) * self.running_var
+                self.running_mean = (self.momentum * self.mean
+                                     + (1 - self.momentum) * self.running_mean)
+                self.running_var = (self.momentum * self.var
+                                    + (1 - self.momentum) * self.running_var)
         else:
             # 在推理时使用训练时计算的均值和方差
             self.mean = self.running_mean
