@@ -1,5 +1,7 @@
 import numpy as np
 
+from utils.ImageMatrixConverter import *
+
 
 class MaxPooling:
     def __init__(self, filter_size=2, stride=2, padding=0):
@@ -9,9 +11,11 @@ class MaxPooling:
         :param stride: 池化的步幅（默认为 2）
         :param padding: 填充（默认为 0）
         """
+        self.arg_max = None
         self.filter_size = filter_size
         self.stride = stride
         self.padding = padding
+        self.input_shape = None  # 保存输入形状
 
     def forward(self, x):
         """
@@ -19,30 +23,25 @@ class MaxPooling:
         :param x: 输入数据，形状为 (N, C, H, W)
         :return: 池化后的输出
         """
-        N, C, H, W = x.shape
+        self.input_shape = x.shape
+        N, C, H, W = self.input_shape
 
         # 计算输出的尺寸
         out_h = (H - self.filter_size + 2 * self.padding) // self.stride + 1
         out_w = (W - self.filter_size + 2 * self.padding) // self.stride + 1
 
-        # 添加填充
-        x_padded = np.pad(x, [(0, 0), (0, 0), (self.padding, self.padding), (self.padding, self.padding)],
-                          mode='constant')
+        # 将输入转换为列形式 (N*out_h*out_w, C*filter_size*filter_size)
+        col = im2col(x, self.filter_size, self.filter_size, self.stride, self.padding)
+        # 重塑为 (N * out_h * out_w, C, filter_size * filter_size)
+        col = col.reshape(-1, self.filter_size * self.filter_size, C).transpose(0, 2, 1)
 
-        # 输出初始化
-        out = np.zeros((N, C, out_h, out_w))
-        self.arg_max = np.zeros_like(out, dtype=int)
+        # 找到每个池化区域的最大值及其索引
+        self.arg_max = np.argmax(col, axis=2)
+        out = np.max(col, axis=2)
 
-        # 执行池化操作
-        for n in range(N):
-            for c in range(C):
-                for i in range(out_h):
-                    for j in range(out_w):
-                        # 池化区域
-                        region = x_padded[n, c, i * self.stride:i * self.stride + self.filter_size,
-                                 j * self.stride:j * self.stride + self.filter_size]
-                        out[n, c, i, j] = np.max(region)
-                        self.arg_max[n, c, i, j] = np.argmax(region)  # 保存最大值的位置
+        # 重塑为 (N, C, out_h, out_w)
+        out = out.reshape(N, out_h, out_w, C).transpose(0, 3, 1, 2)
+
         return out
 
     def backward(self, dout):
@@ -51,17 +50,26 @@ class MaxPooling:
         :param dout: 上一层的梯度
         :return: 传递回去的梯度
         """
-        N, C, H, W = dout.shape
-        dx = np.zeros_like(dout)
+        N, C, out_h, out_w = dout.shape
+        H, W = self.input_shape[2], self.input_shape[3]
 
-        # 将梯度按照最大值的位置传递
-        for n in range(N):
-            for c in range(C):
-                for i in range(H):
-                    for j in range(W):
-                        # 反向传播时，将梯度传递给池化窗口中最大值的位置
-                        region = dout[n, c, i, j]
-                        idx = self.arg_max[n, c, i, j]
-                        dx[n, c, i * self.stride:i * self.stride + self.filter_size,
-                        j * self.stride:j * self.stride + self.filter_size] = region
+        # (N*out_h*out_w, C)
+        dout = dout.transpose(0, 2, 3, 1).reshape(-1, C)
+
+        # 初始化梯度矩阵
+        col_dx = np.zeros((dout.shape[0], C, self.filter_size * self.filter_size), dtype=np.float32)
+
+        # 矢量化梯度分配
+        rows = np.arange(dout.size // C).repeat(C)
+        channels = np.tile(np.arange(C), dout.size // C)
+        col_dx[rows, channels, self.col_max_idx.ravel()] = dout.ravel()
+
+        # 调整维度顺序以匹配 col2im 的输入格式，变为 (N * out_h * out_w, filter_size * filter_size * C)
+        col_dx = col_dx.transpose(0, 2, 1).reshape(-1, C * self.filter_size * self.filter_size)
+        dx = col2im(col_dx, self.input_shape, self.filter_size, self.filter_size, self.stride, self.padding)
+
+        # 修复填充处理
+        if self.padding > 0:
+            dx = dx[:, :, self.padding:H + self.padding, self.padding:W + self.padding]
+
         return dx

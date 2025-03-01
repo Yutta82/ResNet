@@ -31,6 +31,7 @@ class BatchNorm:
         :param training: 是否为训练模式，影响均值和方差的计算
         :return: 归一化后的输出
         """
+        self.input_data = input_data
         # 获取输入数据的形状
         N, C, H, W = input_data.shape
 

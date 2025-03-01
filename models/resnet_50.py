@@ -68,9 +68,9 @@ class ResNet50:
         :return: 预测结果
         """
         for layer_name, layer in self.layers.items():
-            print(f"Layer {layer_name}: input shape {x.shape}")
+            print(f"Forward:Layer {layer_name}: input shape {x.shape}")
             x = layer.forward(x)
-            print(f"Layer {layer_name}: output shape {x.shape}")
+            print(f"Forward:Layer {layer_name}: output shape {x.shape}")
         return x  # 返回最终输出
 
     def loss(self, y_pred, y_true):
@@ -111,5 +111,7 @@ class ResNet50:
 
         # 反向传播
         for layer_name, layer in reversed(self.layers.items()):
+            print(f"Backward:Layer {layer_name}: input shape {dout.shape}")
             dout = layer.backward(dout)
+            print(f"Backward:Layer {layer_name}: output shape {dout.shape}")
         return dout
