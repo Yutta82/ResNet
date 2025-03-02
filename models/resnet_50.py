@@ -15,6 +15,7 @@ class ResNet50:
     def __init__(self, num_classes=43):
         self.num_classes = num_classes
         self.build()
+        self.gradients = OrderedDict()
 
     def build(self):
         """
@@ -23,12 +24,12 @@ class ResNet50:
         self.layers = OrderedDict()
 
         # 初始卷积层，接受3通道的RGB图像
-        self.layers['Conv1'] = ConvLayer(3, 64, filter_size=7, stride=2, padding=3)
+        self.layers['Conv1'] = ConvLayer(3, 64, kernel_size=7, stride=2, padding=3)
         self.layers['BN1'] = BatchNorm()
         self.layers['ReLU1'] = ReLU()
 
         # 最大池化层
-        self.layers['MaxPool'] = MaxPooling(filter_size=3, stride=2, padding=1)
+        self.layers['MaxPool'] = MaxPooling(kernel_size=3, stride=2, padding=1)
 
         # 残差块（瓶颈块），显式地定义每个 BottleneckBlock
         # Block1: 64 -> 256 (3 BottleneckBlocks)
@@ -111,7 +112,12 @@ class ResNet50:
 
         # 反向传播
         for layer_name, layer in reversed(self.layers.items()):
-            print(f"Backward:Layer {layer_name}: input shape {dout.shape}")
-            dout = layer.backward(dout)
-            print(f"Backward:Layer {layer_name}: output shape {dout.shape}")
-        return dout
+            print(f"Backward:Layer {layer_name}: input shape {dout[0].shape}")
+            if (isinstance(dout, tuple)):
+                dout = layer.backward(dout[0])
+            else:
+                dout = layer.backward(dout)
+            print(f"Backward:Layer {layer_name}: output shape {dout[0].shape}")
+            # TODO: 构建各个层的权重和偏置，并将返回的梯度添加到gradients（各层参数命名与main中的params相同）
+            self.gradients[layer_name] = dout
+        return self.gradients

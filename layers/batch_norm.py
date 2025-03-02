@@ -14,32 +14,34 @@ class BatchNorm:
         :param momentum: 用于更新均值和方差的动量
         """
         self.input_data = None
-        self.x_hat = None
-        self.var = None
-        self.mean = None
+        self.x_hat = None  # 标准化后的数据
+        self.var = None  # 当前批次的方差
+        self.mean = None  # 当前批次的均值
         self.epsilon = epsilon
         self.momentum = momentum
-        self.gamma = 1.0  # 标准化缩放系数（会在forward中初始化）
-        self.beta = 0.0  # 标准化偏移量（会在forward中初始化）
-        self.running_mean = None  # 存储均值，用于推理时的使用
-        self.running_var = None  # 存储方差，用于推理时的使用
+        # 可训练参数
+        self.weights = 1.0  # 权重
+        self.bias = 0.0  # 偏置
+        # 用于推理的滑动平均值和方差
+        self.running_mean = None
+        self.running_var = None
 
-    def forward(self, input_data, training=True):
+    def forward(self, x, training=True):
         """
         前向传播过程，计算归一化后的输出
-        :param input_data: 输入数据，形状为(N, C, H, W)
+        :param x: 输入数据，形状为(N, C, H, W)
         :param training: 是否为训练模式，影响均值和方差的计算
         :return: 归一化后的输出
         """
-        self.input_data = input_data
+        self.input_data = x
         # 获取输入数据的形状
-        N, C, H, W = input_data.shape
+        N, C, H, W = x.shape
 
         # 计算均值和方差
         if training:
             # 计算当前批次的均值和方差
-            self.mean = np.mean(input_data, axis=(0, 2, 3), keepdims=True)
-            self.var = np.var(input_data, axis=(0, 2, 3), keepdims=True)
+            self.mean = np.mean(x, axis=(0, 2, 3), keepdims=True)
+            self.var = np.var(x, axis=(0, 2, 3), keepdims=True)
 
             # 更新滑动平均值（用于推理）
             if self.running_mean is None:
@@ -56,15 +58,15 @@ class BatchNorm:
             self.var = self.running_var
 
         # 标准化
-        self.x_hat = (input_data - self.mean) / np.sqrt(self.var + self.epsilon)
+        self.x_hat = (x - self.mean) / np.sqrt(self.var + self.epsilon)
 
         # 如果没有初始化gamma和beta，则在训练时进行初始化
-        if self.gamma is None:
-            self.gamma = np.ones((1, C, 1, 1))  # 对每个通道应用相同的缩放因子
-            self.beta = np.zeros((1, C, 1, 1))  # 对每个通道应用相同的偏移量
+        if self.weights is None:
+            self.weights = np.ones((1, C, 1, 1))  # 对每个通道应用相同的缩放因子
+            self.bias = np.zeros((1, C, 1, 1))  # 对每个通道应用相同的偏移量
 
         # 返回标准化后的数据
-        out = self.gamma * self.x_hat + self.beta
+        out = self.weights * self.x_hat + self.bias
         return out
 
     def backward(self, dout):
@@ -77,11 +79,11 @@ class BatchNorm:
         N, C, H, W = dout.shape
 
         # 计算 beta 和 gamma 的梯度
-        dbeta = np.sum(dout, axis=(0, 2, 3), keepdims=True)
-        dgamma = np.sum(dout * self.x_hat, axis=(0, 2, 3), keepdims=True)
+        dbias = np.sum(dout, axis=(0, 2, 3), keepdims=True)
+        dweights = np.sum(dout * self.x_hat, axis=(0, 2, 3), keepdims=True)
 
         # 计算 x_hat 的梯度
-        dx_hat = dout * self.gamma
+        dx_hat = dout * self.weights
 
         # 计算输入数据的梯度
         dvar = np.sum(dx_hat * (self.input_data - self.mean) * -0.5 * np.power(self.var + self.epsilon, -1.5),
@@ -91,4 +93,4 @@ class BatchNorm:
 
         # 计算输入的梯度
         dx = dx_hat / np.sqrt(self.var + self.epsilon) + dvar * 2 * (self.input_data - self.mean) / N + dmean / N
-        return dx, dgamma, dbeta
+        return dx, dweights, dbias

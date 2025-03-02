@@ -5,17 +5,17 @@ class ReLU:
     def __init__(self):
         self.input_data = None
 
-    def forward(self, input_data):
+    def forward(self, x):
         """
         前向传播：对输入数据应用 ReLU 激活函数
-        :param input_data: 输入数据，形状为 (N, C, H, W)
+        :param x: 输入数据，形状为 (N, C, H, W)
         :return: 输出数据，形状与输入相同，但应用了 ReLU 激活函数
         """
         # 存储输入数据用于反向传播
-        self.input_data = input_data
+        self.input_data = x
 
         # ReLU 激活：大于 0 的值保留，小于 0 的值置为 0
-        return np.maximum(0, input_data)
+        return np.maximum(0, x)
 
     def backward(self, dout):
         """

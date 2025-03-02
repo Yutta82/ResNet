@@ -12,23 +12,23 @@ class BottleneckBlock:
         :param stride: 步幅
         """
         # 第一层 1x1 卷积，用于减少通道数
-        self.conv1 = ConvLayer(in_channels, out_channels // 4, filter_size=1, stride=1, padding=0)
+        self.conv1 = ConvLayer(in_channels, out_channels // 4, kernel_size=1, stride=1, padding=0)
         self.bn1 = BatchNorm()
         self.relu1 = ReLU()
 
         # 第二层 3x3 卷积，用于卷积操作
-        self.conv2 = ConvLayer(out_channels // 4, out_channels // 4, filter_size=3, stride=stride, padding=1)
+        self.conv2 = ConvLayer(out_channels // 4, out_channels // 4, kernel_size=3, stride=stride, padding=1)
         self.bn2 = BatchNorm()
         self.relu2 = ReLU()
 
         # 第三层 1x1 卷积，用于恢复通道数
-        self.conv3 = ConvLayer(out_channels // 4, out_channels, filter_size=1, stride=1, padding=0)
+        self.conv3 = ConvLayer(out_channels // 4, out_channels, kernel_size=1, stride=1, padding=0)
         self.bn3 = BatchNorm()
         self.relu3 = ReLU()
 
         # 如果输入输出通道数不同，则需要使用 1x1 卷积调整输入通道数
         if in_channels != out_channels:
-            self.shortcut = ConvLayer(in_channels, out_channels, filter_size=1, stride=stride, padding=0)
+            self.shortcut = ConvLayer(in_channels, out_channels, kernel_size=1, stride=stride, padding=0)
             self.shortcut_bn = BatchNorm()
         else:
             self.shortcut = None
@@ -80,21 +80,21 @@ class BottleneckBlock:
         # 主路径的反向传播
         # 第三层
         dx = dx_main
-        dx, _, _ = self.bn3.backward(dx)
-        dx, _, _ = self.conv3.backward(dx)
+        dx, dweights, dbias = self.bn3.backward(dx)
+        dx, dweights, dbias = self.conv3.backward(dx)
         # 第二层
         dx = self.relu2.backward(dx)
-        dx, _, _ = self.bn2.backward(dx)
-        dx, _, _ = self.conv2.backward(dx)
+        dx, dweights, dbias = self.bn2.backward(dx)
+        dx, dweights, dbias = self.conv2.backward(dx)
         # 第一层
         dx = self.relu1.backward(dx)
-        dx, _, _ = self.bn1.backward(dx)
-        dx, _, _ = self.conv1.backward(dx)
+        dx, dweights, dbias = self.bn1.backward(dx)
+        dx, dweights, dbias = self.conv1.backward(dx)
 
         # 残差路径的反向传播
         if self.shortcut is not None:
-            dx_identity, _, _ = self.shortcut_bn.backward(dx_identity)
-            dx_identity, _, _ = self.shortcut.backward(dx_identity)
+            dx_identity, dweights_identity, dbias_identity = self.shortcut_bn.backward(dx_identity)
+            dx_identity, dweights_identity, dbias_identity = self.shortcut.backward(dx_identity)
         # 如果没有 shortcut，则 dx_identity 不变（即 dout）
 
         # 将两条路径的梯度相加

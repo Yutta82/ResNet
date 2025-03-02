@@ -24,12 +24,12 @@ class ResNet50:
         self.layers = OrderedDict()
 
         # 初始卷积层，接受3通道的RGB图像
-        self.layers['Conv1'] = ConvLayer(3, 64, filter_size=7, stride=2, padding=3)
+        self.layers['Conv1'] = ConvLayer(3, 64, kernel_size=7, stride=2, padding=3)
         self.layers['BN1'] = BatchNorm()
         self.layers['ReLU1'] = ReLU()
 
         # 最大池化层
-        self.layers['MaxPool'] = MaxPooling(filter_size=3, stride=2, padding=1)
+        self.layers['MaxPool'] = MaxPooling(kernel_size=3, stride=2, padding=1)
 
         # 残差块（瓶颈块），显式地定义每个 BottleneckBlock
         # Block1: 64 -> 256 (3 BottleneckBlocks)

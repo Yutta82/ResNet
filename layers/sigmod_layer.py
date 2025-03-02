@@ -5,13 +5,13 @@ class Sigmoid:
     def __init__(self):
         self.out = None  # 保存前向传播的输出，用于反向传播
 
-    def forward(self, input_data):
+    def forward(self, x):
         """
         前向传播：对输入数据应用 ReLU 激活函数
-        :param input_data: 输入数据，形状为 (N, C, H, W)
+        :param x: 输入数据，形状为 (N, C, H, W)
         :return: 输出数据，形状与输入相同，但应用了 ReLU 激活函数
         """
-        self.out = 1 / (1 + np.exp(-input_data))  # Sigmoid 函数
+        self.out = 1 / (1 + np.exp(-x))  # Sigmoid 函数
         return self.out
 
     def backward(self, dout):

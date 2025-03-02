@@ -42,6 +42,7 @@ for epoch in range(epochs):
         # 计算当前批次的梯度（反向传播）
         gradients = model.gradient(X_batch, y_batch)
         # 使用优化器更新模型的参数
+        # TODO: 构建一个各层参数的字典params传入optimizer.update()，不用model.layers
         model.layers = optimizer.update(model.layers, gradients)
         # 更新 Plotter
         plotter.update(loss, accuracy)

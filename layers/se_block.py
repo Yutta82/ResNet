@@ -16,9 +16,9 @@ class SEBlock:
         self.reduction = reduction
 
         # 初始化全连接层权重和偏置
-        self.fc1 = np.random.randn(channel, channel // reduction) * 0.1  # 第一层全连接权重
+        self.fc1_weights = np.random.randn(channel, channel // reduction) * 0.1  # 第一层全连接权重
         self.fc1_bias = np.zeros(channel // reduction)  # 第一层偏置
-        self.fc2 = np.random.randn(channel // reduction, channel) * 0.1  # 第二层全连接权重
+        self.fc2_weights = np.random.randn(channel // reduction, channel) * 0.1  # 第二层全连接权重
         self.fc2_bias = np.zeros(channel)  # 第二层偏置
 
         # 实例化 ReLU 和 Sigmoid
@@ -44,12 +44,12 @@ class SEBlock:
         self.pooled = np.mean(x, axis=(2, 3), keepdims=True)
 
         # 第一层全连接
-        fc1_out = np.dot(self.pooled.reshape(N, C), self.fc1)
+        fc1_out = np.dot(self.pooled.reshape(N, C), self.fc1_weights)
         fc1_out = np.maximum(0, fc1_out)  # ReLU 激活
         self.fc1_out = fc1_out
 
         # 第二层全连接
-        fc2_out = np.dot(fc1_out, self.fc2)
+        fc2_out = np.dot(fc1_out, self.fc2_weights)
         # scale = 1 / (1 + np.exp(-fc2_out))  # Sigmoid 激活
         scale = self.sigmoid.forward(fc2_out)
         self.fc2_out = fc2_out
@@ -86,7 +86,7 @@ class SEBlock:
         dfc2_bias = np.sum(dfc2_out, axis=0)
 
         # ReLU 的反向传播
-        dfc1_out = np.dot(dfc2_out, self.fc2.T)
+        dfc1_out = np.dot(dfc2_out, self.fc2_weights.T)
         dfc1_out = self.relu.backward(dfc1_out)  # 调用 ReLU 的反向传播
 
         # fc1 的梯度
@@ -94,15 +94,15 @@ class SEBlock:
         dfc1_bias = np.sum(dfc1_out, axis=0)
 
         # 更新 fc2 权重和偏置
-        self.fc2 -= self.learning_rate * dfc2_weights
+        self.fc2_weights -= self.learning_rate * dfc2_weights
         self.fc2_bias -= self.learning_rate * dfc2_bias
 
         # 更新 fc1 权重和偏置
-        self.fc1 -= self.learning_rate * dfc1_weights
+        self.fc1_weights -= self.learning_rate * dfc1_weights
         self.fc1_bias -= self.learning_rate * dfc1_bias
 
         # 全局平均池化的梯度
-        dpooled = np.dot(dfc1_out, self.fc1.T).reshape(N, C, 1, 1)
+        dpooled = np.dot(dfc1_out, self.fc1_weights.T).reshape(N, C, 1, 1)
         dx += dpooled / (H * W)
 
         return dx
